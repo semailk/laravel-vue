@@ -17,7 +17,7 @@ class MainService
      */
     public function getAllBookings(): array
     {
-        $response = DB::select('SELECT e.name employee_name,cer.deactivated_at, cer.id,c.name client_name, r.name rend_name, if(r.status = 1, \'Занят\',\'Свободен\') rend_status, cer.created_at FROM laravel.client_employee_rent cer
+        $response = DB::select('SELECT e.name employee_name,cer.deactivated_at, cer.id,c.name client_name, r.name rend_name,  if(cer.deactivated_at IS NOT NULL, \'Свободен\',\'Занят\') rend_status, cer.created_at FROM laravel.client_employee_rent cer
                                     INNER JOIN employees e ON e.id = cer.employee_id
                                     INNER JOIN clients c ON cer.client_id = c.id
                                     INNER JOIN rents r ON cer.rent_id = r.id;');
@@ -133,7 +133,7 @@ class MainService
     {
         try {
             DB::transaction(function () use ($request){
-                $rentId = DB::select("SELECT rent_id FROM client_employee_rent WHERE id=$request->id LIMIT 1");
+                $rentId = DB::select("SELECT rent_id, deactivated_at FROM client_employee_rent WHERE id=$request->id LIMIT 1");
 
                 Rent::query()->find($rentId[0]->rent_id)->update([
                     'status' => 0
@@ -141,11 +141,19 @@ class MainService
 
                 DB::select("UPDATE client_employee_rent SET client_id=$request->client_id, rent_id=$request->rent_id, employee_id=$request->employee_id WHERE id=$request->id");
 
-                Rent::query()->find($request->rent_id)->update([
-                    'status' => 1
-                ]);
+                if ($rentId[0]->deactivated_at){
+                    Rent::query()->find($request->rent_id)->update([
+                        'status' => 0
+                    ]);
+                }else{
+                    Rent::query()->find($request->rent_id)->update([
+                        'status' => 1
+                    ]);
+                }
+
             });
             DB::commit();
+
 
         } catch (\Exception $exception) {
             DB::rollBack();
